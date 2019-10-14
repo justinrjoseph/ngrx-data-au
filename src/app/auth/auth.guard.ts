@@ -1,37 +1,25 @@
-import {ActivatedRouteSnapshot, CanActivate, Router, RouterStateSnapshot} from '@angular/router';
-import {Injectable} from '@angular/core';
-import {Observable} from 'rxjs';
-import {AppState} from '../reducers';
-import {select, Store} from '@ngrx/store';
-import {isLoggedIn} from './auth.selectors';
-import {tap} from 'rxjs/operators';
-import {login, logout} from './auth.actions';
+import { Injectable } from '@angular/core';
+import { CanActivate, Router } from '@angular/router';
 
+import { Observable } from 'rxjs';
+import { tap } from 'rxjs/operators';
+import { Store } from '@ngrx/store';
+
+import { AuthState } from './store/state';
+import { isLoggedIn } from './store/selectors';
 
 @Injectable()
 export class AuthGuard implements CanActivate {
+  constructor(private _store: Store<AuthState>, private _router: Router) {}
 
-    constructor(
-        private store: Store<AppState>,
-        private router: Router) {
+  canActivate(): Observable<boolean> {
+    return this._store.select(isLoggedIn)
+      .pipe(
+        tap((loggedIn: boolean) => {
+          const loggedOut = !loggedIn;
 
-    }
-
-    canActivate(
-        route: ActivatedRouteSnapshot,
-        state: RouterStateSnapshot): Observable<boolean> {
-
-        return this.store
-            .pipe(
-                select(isLoggedIn),
-                tap(loggedIn => {
-                    if (!loggedIn) {
-                        this.router.navigateByUrl('/login');
-                    }
-                })
-            )
-
-
-    }
-
+          if ( loggedOut ) this._router.navigate(['/login']);
+        })
+      );
+  }
 }

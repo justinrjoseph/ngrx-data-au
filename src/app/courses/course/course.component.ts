@@ -1,73 +1,67 @@
-import {AfterViewInit, ChangeDetectionStrategy, Component, OnInit} from '@angular/core';
-import {ActivatedRoute} from '@angular/router';
-import {Course} from '../model/course';
-import {Observable, of} from 'rxjs';
-import {Lesson} from '../model/lesson';
-import {concatMap, delay, filter, first, map, shareReplay, tap, withLatestFrom} from 'rxjs/operators';
-import {CoursesHttpService} from '../services/courses-http.service';
-import {CourseEntityService} from '../services/course-entity.service';
-import {LessonEntityService} from '../services/lesson-entity.service';
+import { Component, OnInit, ChangeDetectionStrategy } from '@angular/core';
+import { ActivatedRoute } from '@angular/router';
 
+import { Observable } from 'rxjs';
+import { map, tap, withLatestFrom, delay } from 'rxjs/operators';
+
+import { CourseEntityService, LessonEntityService } from '../services';
+
+import { Course, Lesson } from '../models';
 
 @Component({
-    selector: 'course',
-    templateUrl: './course.component.html',
-    styleUrls: ['./course.component.css'],
-    changeDetection: ChangeDetectionStrategy.OnPush
+  selector: 'course',
+  templateUrl: './course.component.html',
+  styleUrls: ['./course.component.css'],
+  changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class CourseComponent implements OnInit {
+  course$: Observable<Course>;
 
-    course$: Observable<Course>;
+  loading$: Observable<boolean>;
 
-    loading$: Observable<boolean>;
+  lessons$: Observable<Lesson[]>;
 
-    lessons$: Observable<Lesson[]>;
+  displayedColumns = ['seqNo', 'description', 'duration'];
 
-    displayedColumns = ['seqNo', 'description', 'duration'];
+  nextPage = 3;
 
-    nextPage = 0;
+  constructor(
+    private route: ActivatedRoute,
+    private _courseService: CourseEntityService,
+    private _lessonService: LessonEntityService
+  ) {}
 
-    constructor(
-        private coursesService: CourseEntityService,
-        private lessonsService: LessonEntityService,
-        private route: ActivatedRoute) {
+  ngOnInit() {
+    const courseUrl = this.route.snapshot.paramMap.get('courseUrl');
 
-    }
+    this.course$ = this._courseService.entities$
+      .pipe(
+        map((courses: Course[]) => {
+          return courses.find((course) => course.url === courseUrl);
+        })
+      );
 
-    ngOnInit() {
+    this.lessons$ = this._lessonService.entities$
+      .pipe(
+        withLatestFrom(this.course$),
+        tap(([lessons, course]) => {
+          if ( !this.nextPage ) this.loadLessonsPage(course);
+        }),
+        map(([lessons, course]) => {
+          return lessons.filter((lesson) => lesson.courseId === course.id);
+        })
+      );
 
-        const courseUrl = this.route.snapshot.paramMap.get('courseUrl');
+    this.loading$ = this._lessonService.loading$.pipe(delay(0));
+  }
 
-        this.course$ = this.coursesService.entities$
-            .pipe(
-                map(courses => courses.find(course => course.url == courseUrl))
-            );
+  loadLessonsPage(course: Course) {
+    const courseId = course.id.toString(),
+          pageNumber = this.nextPage.toString(),
+          pageSize = '3';
 
-        this.lessons$ = this.lessonsService.entities$
-            .pipe(
-                withLatestFrom(this.course$),
-                tap(([lessons, course]) => {
-                    if (this.nextPage == 0) {
-                        this.loadLessonsPage(course);
-                    }
-                }),
-                map(([lessons, course]) =>
-                    lessons.filter(lesson => lesson.courseId == course.id))
-            );
+    this._lessonService.getWithQuery({ courseId, pageNumber, pageSize });
 
-        this.loading$ = this.lessonsService.loading$.pipe(delay(0));
-
-    }
-
-    loadLessonsPage(course: Course) {
-        this.lessonsService.getWithQuery({
-            'courseId': course.id.toString(),
-            'pageNumber': this.nextPage.toString(),
-            'pageSize': '3'
-        });
-
-        this.nextPage += 1;
-
-    }
-
+    this.nextPage += 1;
+  }
 }
